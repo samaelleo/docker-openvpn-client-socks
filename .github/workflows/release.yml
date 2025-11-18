@@ -1,0 +1,56 @@
+name: Create Release with Docker Images
+
+on:
+  push:
+    tags:
+      - 'v*' # این ورک‌فلو فقط وقتی اجرا می‌شود که تگی مثل v1.0.0 بزنید
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # اجازه برای ساخت Release و آپلود فایل
+
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🛠️ Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # 1. بیلد کردن و ذخیره نسخه AMD64 (سرورهای معمولی و اینتل)
+      - name: 📦 Build and Export AMD64
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          tags: openvpn-client:latest
+          # نکته مهم: خروجی را به جای پوش کردن، در فایل ذخیره می‌کنیم
+          outputs: type=docker,dest=/tmp/openvpn-client-amd64.tar
+
+      # 2. بیلد کردن و ذخیره نسخه ARM64 (رزبری پای، مک M1/M2)
+      - name: 📦 Build and Export ARM64
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/arm64
+          tags: openvpn-client:latest
+          outputs: type=docker,dest=/tmp/openvpn-client-arm64.tar
+
+      # 3. فشرده‌سازی فایل‌ها (اختیاری - برای کاهش حجم دانلود)
+      - name: 🗜️ Compress Artifacts
+        run: |
+          gzip -c /tmp/openvpn-client-amd64.tar > openvpn-client-amd64.tar.gz
+          gzip -c /tmp/openvpn-client-arm64.tar > openvpn-client-arm64.tar.gz
+
+      # 4. ایجاد Release و آپلود فایل‌ها
+      - name: 🚀 Create Release and Upload Assets
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            openvpn-client-amd64.tar.gz
+            openvpn-client-arm64.tar.gz
+          generate_release_notes: true # تولید خودکار توضیحات تغییرات
